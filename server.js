@@ -44,6 +44,8 @@ const OrderSchema = new mongoose.Schema({
   repId: String,
   shopId: String,
   distributor: String,
+  deliveryStatus: { type: String, enum: ['pending','delivered'], default: 'pending' },
+  deliveredAt: String,
   products: [{
     name: String,
     variant: String,
