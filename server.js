@@ -98,11 +98,16 @@ function managerOnly(req, res, next) {
 
 // ── SEED MANAGER ON FIRST RUN ──
 async function seedManager() {
-  const exists = await User.findOne({ role: 'manager' });
+  const exists = await User.findOne({ username: 'manager' });
   if (!exists) {
     const hashed = await bcrypt.hash('admin123', 10);
-    await User.create({ username: 'manager', password: hashed, name: 'Manager', role: 'manager' });
-    console.log('Default manager created: manager / admin123');
+    await User.create({ username: 'manager', password: hashed, name: 'Manager', role: 'manager', email: '' });
+    console.log('Manager created: manager / admin123');
+  } else {
+    // Always reset manager password on startup to ensure it works
+    const hashed = await bcrypt.hash('admin123', 10);
+    await User.findOneAndUpdate({ username: 'manager' }, { password: hashed });
+    console.log('Manager password verified/reset');
   }
 }
 seedManager();
@@ -111,13 +116,27 @@ seedManager();
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
+    console.log('Login attempt:', username);
     const user = await User.findOne({ username });
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!user) {
+      console.log('User not found:', username);
+      // List all users for debugging
+      const allUsers = await User.find({}, 'username role');
+      console.log('All users in DB:', JSON.stringify(allUsers));
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
     const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!match) {
+      console.log('Password mismatch for:', username);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    console.log('Login success:', username, user.role);
     const token = jwt.sign({ id: user._id, username: user.username, name: user.name, role: user.role, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
     res.json({ token, user: { id: user._id, username: user.username, name: user.name, role: user.role, email: user.email } });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Login error:', e.message);
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 app.post('/api/login/google', async (req, res) => {
@@ -134,6 +153,7 @@ app.post('/api/login/google', async (req, res) => {
 app.get('/api/users', auth, managerOnly, async (req, res) => {
   try {
     const users = await User.find({}, '-password');
+    console.log('Getting users, count:', users.length);
     res.json(users);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -141,12 +161,17 @@ app.get('/api/users', auth, managerOnly, async (req, res) => {
 app.post('/api/users', auth, managerOnly, async (req, res) => {
   try {
     const { username, password, name, email } = req.body;
+    console.log('Creating rep:', username, name);
     const exists = await User.findOne({ username });
     if (exists) return res.status(400).json({ error: 'Username already exists' });
     const hashed = await bcrypt.hash(password, 10);
     const user = await User.create({ username, password: hashed, name, role: 'rep', email: email?.toLowerCase() || '' });
-    res.json({ id: user._id, username: user.username, name: user.name, role: user.role, email: user.email });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    console.log('Rep created successfully:', user._id, username);
+    res.json({ id: user._id, _id: user._id, username: user.username, name: user.name, role: user.role, email: user.email });
+  } catch (e) { 
+    console.error('Create user error:', e.message);
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 app.put('/api/users/:id', auth, managerOnly, async (req, res) => {
