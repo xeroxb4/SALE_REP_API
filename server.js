@@ -131,8 +131,8 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     console.log('Login success:', username, user.role);
-    const token = jwt.sign({ id: user._id, username: user.username, name: user.name, role: user.role, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: { id: user._id, username: user.username, name: user.name, role: user.role, email: user.email } });
+    const token = jwt.sign({ id: String(user._id), _id: String(user._id), username: user.username, name: user.name, role: user.role, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, user: { id: String(user._id), _id: String(user._id), username: user.username, name: user.name, role: user.role, email: user.email } });
   } catch (e) { 
     console.error('Login error:', e.message);
     res.status(500).json({ error: e.message }); 
@@ -144,8 +144,8 @@ app.post('/api/login/google', async (req, res) => {
     const { email } = req.body;
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return res.status(404).json({ error: 'No account linked to this Google email' });
-    const token = jwt.sign({ id: user._id, username: user.username, name: user.name, role: user.role, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: { id: user._id, username: user.username, name: user.name, role: user.role, email: user.email } });
+    const token = jwt.sign({ id: String(user._id), _id: String(user._id), username: user.username, name: user.name, role: user.role, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, user: { id: String(user._id), _id: String(user._id), username: user.username, name: user.name, role: user.role, email: user.email } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -202,9 +202,15 @@ app.get('/api/shops', auth, async (req, res) => {
 
 app.post('/api/shops', auth, async (req, res) => {
   try {
-    const shop = await Shop.create({ ...req.body, repId: req.user.id });
+    const repId = req.user.id || req.user._id;
+    console.log('Creating shop for repId:', repId, 'user:', req.user.username);
+    const shop = await Shop.create({ ...req.body, repId: String(repId) });
+    console.log('Shop created:', shop.name, 'repId:', shop.repId);
     res.json(shop);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Shop create error:', e.message);
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 app.put('/api/shops/:id', auth, async (req, res) => {
@@ -232,12 +238,17 @@ app.get('/api/orders', auth, async (req, res) => {
 
 app.post('/api/orders', auth, async (req, res) => {
   try {
-    // Generate order number
     const count = await Order.countDocuments();
     const orderNum = 'ORD-' + String(count + 1).padStart(4, '0');
-    const order = await Order.create({ ...req.body, repId: req.user.id, orderNum });
+    const repId = String(req.user.id || req.user._id);
+    console.log('Creating order for repId:', repId, 'shop:', req.body.shopId);
+    const order = await Order.create({ ...req.body, repId, orderNum });
+    console.log('Order created:', order.orderNum);
     res.json(order);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Order create error:', e.message);
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 app.put('/api/orders/:id', auth, async (req, res) => {
