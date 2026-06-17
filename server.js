@@ -293,6 +293,16 @@ app.post('/api/visits', auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── FIX REPID FOR EXISTING SHOPS (manager only) ──
+app.put('/api/shops/:id/assign-rep', auth, managerOnly, async (req, res) => {
+  try {
+    const { repId } = req.body;
+    const shop = await Shop.findByIdAndUpdate(req.params.id, { repId: String(repId) }, { new: true });
+    console.log('Shop repId updated:', shop.name, '->', repId);
+    res.json(shop);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── HEALTH CHECK ──
 app.get('/', (req, res) => res.json({ status: 'Sales Rep API running', version: '1.0.0' }));
 
